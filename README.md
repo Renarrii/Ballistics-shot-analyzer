@@ -1,1 +1,2 @@
 # Ballistics-shot-analyzer
+Ballistics is a Python-based basketball shot analyzer. I have developed a data processing pipeline using OpenCV and MediaPipe that tracks biomechanical metrics, extracting key pose landmarks and evaluating the synchronization of kinetic chain elements. The user benefits from multiple parameterization methods and a custom Random Forest machine learning model, gaining valuable, real-time insights to improve their shooting technique
