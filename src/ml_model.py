@@ -1,16 +1,19 @@
 import os
 import pandas as pd
-from typing import Tuple, Any
+from typing import Tuple, Any , Optional
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import joblib
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configuration constants
-DATASET_PATH: str = 'dataset.csv' # Change it to ur dataset path
-MODEL_PATH: str = 'model.pkl' # Change it to ur model path
-TEST_SIZE: float = 0.2
-RANDOM_STATE: int = 42
+DATASET_PATH: Optional[str] = os.getenv('DATA_SET_PATH', 'dataset.csv')
+MODEL_PATH: Optional[str] = os.getenv('MODEL_PATH', 'model.pkl')
+TEST_SIZE: float = float(os.getenv('TEST_SIZE', 0.2))
+RANDOM_STATE: int = int(os.getenv('RANDOM_STATE', 42))
 
 
 def load_and_prepare_data(filepath: str) -> Tuple[pd.DataFrame, pd.Series]:
@@ -77,7 +80,7 @@ def main() -> None:
         save_model(trained_model, MODEL_PATH)
 
     except Exception as error:
-        print(f"\n[ERROR] An error occurred during training:\n{error}")
+        print(f"\n An error occurred during training:\n{error}")
 
 
 if __name__ == "__main__":
