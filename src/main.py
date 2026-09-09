@@ -3,15 +3,18 @@ import mediapipe as mp
 import numpy as np
 import joblib
 import pandas as pd
+from dotenv import load_dotenv
 import os
 from typing import Tuple, Optional, Dict, Any
 
+load_dotenv()
+
 # Physical and configuration constants
 GATHER_DATA: bool = False
-VIDEO_PATH: str = 'video.mp4' # Change it to ur video path
-MODEL_PATH: str = 'model.pkl' # Change it to ur model path
-DATASET_PATH: str = 'dataset.csv' # Change it to ur dataset path
-IS_GOOD_SHOT: int = 1
+VIDEO_PATH: Optional[str] = os.getenv('VIDEO_PATH')
+MODEL_PATH: Optional[str] = os.getenv('MODEL_PATH')
+DATASET_PATH: Optional[str] = os.getenv('DATA_SET_PATH')
+IS_GOOD_SHOT: int = int(os.getenv('IS_SHOT_GOOD', 0))
 
 
 def calculate_angle(a: Any, b: Any, c: Any) -> Tuple[Optional[float], Optional[str]]:
@@ -33,7 +36,8 @@ def calculate_angle(a: Any, b: Any, c: Any) -> Tuple[Optional[float], Optional[s
     return None, None
 
 
-def draw_skeleton(a: Tuple[int, int], b: Tuple[int, int], c: Tuple[int, int], deg: Optional[float], deg_text: Optional[str], frame: np.ndarray) -> None:
+def draw_skeleton(a: Tuple[int, int], b: Tuple[int, int], c: Tuple[int, int], deg: Optional[float],
+                  deg_text: Optional[str], frame: np.ndarray) -> None:
     """Draws lines representing connections and circles in the middle of a body part."""
     if deg is not None and deg_text is not None:
         cv2.line(frame, a, b, (0, 255, 0), 4)
@@ -44,7 +48,8 @@ def draw_skeleton(a: Tuple[int, int], b: Tuple[int, int], c: Tuple[int, int], de
         cv2.putText(frame, deg_text, (b[0] + 20, b[1]), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
 
-def data_or_model(switch: bool, dip: float, release_angle: float, is_good_shot: int, model: Optional[Any] = None) -> Tuple[str, Tuple[int, int, int]]:
+def data_or_model(switch: bool, dip: float, release_angle: float, is_good_shot: int, model: Optional[Any] = None) -> \
+Tuple[str, Tuple[int, int, int]]:
     """Switches between data gathering mode and model inference mode."""
     if switch:
         file_exist: bool = os.path.isfile(DATASET_PATH)
@@ -76,10 +81,19 @@ def main() -> None:
     # Model setup
     ai_model: Optional[Any] = None
     if not GATHER_DATA:
+        if not MODEL_PATH or not os.path.isfile(MODEL_PATH):
+            raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
         ai_model = joblib.load(MODEL_PATH)
         print("Model loaded successfully.")
 
-    video = cv2.VideoCapture(VIDEO_PATH)
+    if not VIDEO_PATH or not os.path.isfile(VIDEO_PATH):
+        raise FileNotFoundError(f"Video file not found: {VIDEO_PATH}")
+
+    video: cv2.VideoCapture = cv2.VideoCapture(VIDEO_PATH)
+
+    if not video.isOpened():
+        raise ValueError(f"Cannot open video: {VIDEO_PATH}")
+
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose()
 
@@ -127,8 +141,10 @@ def main() -> None:
                 # Calculating angles
                 deg1, deg1_text = calculate_angle(body_parts['l_hip'], body_parts['l_knee'], body_parts['l_ankle'])
                 deg3, deg3_text = calculate_angle(body_parts['r_hip'], body_parts['r_knee'], body_parts['r_ankle'])
-                deg2, deg2_text = calculate_angle(body_parts['r_shoulder'], body_parts['r_elbow'], body_parts['r_wrist'])
-                deg4, deg4_text = calculate_angle(body_parts['l_shoulder'], body_parts['l_elbow'], body_parts['l_wrist'])
+                deg2, deg2_text = calculate_angle(body_parts['r_shoulder'], body_parts['r_elbow'],
+                                                  body_parts['r_wrist'])
+                deg4, deg4_text = calculate_angle(body_parts['l_shoulder'], body_parts['l_elbow'],
+                                                  body_parts['l_wrist'])
 
                 # Tracking dip
                 current_dip: Optional[float] = None
@@ -140,7 +156,8 @@ def main() -> None:
                     current_dip = deg3
 
                 if current_dip is not None and current_dip < dip1 and (
-                        body_parts['r_wrist'].y < body_parts['r_hip'].y or body_parts['l_wrist'].y < body_parts['l_hip'].y):
+                        body_parts['r_wrist'].y < body_parts['r_hip'].y or body_parts['l_wrist'].y < body_parts[
+                    'l_hip'].y):
                     dip_frame = frame_counter
                     dip1 = current_dip
 
@@ -157,8 +174,10 @@ def main() -> None:
                     release_frame = frame_counter
 
                 # Model evaluation or data logging
-                if release_frame != 0 and (release_frame + fps <= frame_counter) and (deg_temp is not None and deg_temp < 90):
-                    model_status, status_color2 = data_or_model(GATHER_DATA, dip1, release_angle1, IS_GOOD_SHOT, ai_model)
+                if release_frame != 0 and (release_frame + fps <= frame_counter) and (
+                        deg_temp is not None and deg_temp < 90):
+                    model_status, status_color2 = data_or_model(GATHER_DATA, dip1, release_angle1, IS_GOOD_SHOT,
+                                                                ai_model)
 
                     # Reset mechanics tracking
                     dip1 = 360.0
@@ -185,11 +204,14 @@ def main() -> None:
                 draw_skeleton(pixels['l_shoulder'], pixels['l_elbow'], pixels['l_wrist'], deg4, deg4_text, frame)
 
                 cv2.putText(frame, f"Max dip: {int(dip1)}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                cv2.putText(frame, f"Max release angle: {int(release_angle1)}", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                cv2.putText(frame, f"Kinetic Chain: {timing_status}", (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, status_color, 2)
+                cv2.putText(frame, f"Max release angle: {int(release_angle1)}", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            (255, 255, 255), 2)
+                cv2.putText(frame, f"Kinetic Chain: {timing_status}", (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            status_color, 2)
 
             if not GATHER_DATA:
-                cv2.putText(frame, f"Model Verdict: {model_status}", (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, status_color2, 2)
+                cv2.putText(frame, f"Model Verdict: {model_status}", (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            status_color2, 2)
 
             cv2.imshow("Video", frame)
             if cv2.waitKey(10) & 0xFF == ord('q'):
@@ -198,7 +220,8 @@ def main() -> None:
     except KeyboardInterrupt:
         print("\nProcess interrupted by user.")
     finally:
-        video.release()
+        if 'video' in locals():
+            video.release()
         pose.close()
         cv2.destroyAllWindows()
         print("Resources released. Shutting down.")
